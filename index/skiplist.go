@@ -3,19 +3,27 @@ package index
 import (
 	"math/rand"
 	"simple-kv/config"
-	"simple-kv/records"
+	"simple-kv/modules"
+	"simple-kv/values"
+	"sync"
+	"sync/atomic"
 	"time"
+)
+
+var (
+	indexCounter = uint64(0)
+	ActiveIndex  = map[uint64]*SkipList{}
 )
 
 type SkipNode struct {
 	Key uint64
-	Val *records.Value
+	Val *values.Value
 
 	Nexts []*SkipNode
 	Level int
 }
 
-func NewSkipNode(key uint64, val string) *SkipNode {
+func (s *SkipList) NewSkipNode(key uint64, val string) *SkipNode {
 	nexts := make([]*SkipNode, config.SkipListMaxLevel)
 	for i := range nexts {
 		nexts[i] = nil
@@ -23,29 +31,42 @@ func NewSkipNode(key uint64, val string) *SkipNode {
 
 	return &SkipNode{
 		Key:   key,
-		Val:   records.NewValue(val),
+		Val:   s.ValueManager.NewValue(s.LockManager.NewRWLock()),
 		Nexts: nexts,
 		Level: 0,
 	}
 }
 
 type SkipList struct {
-	Header *SkipNode
-	Level  int
+	ID           uint64
+	Header       *SkipNode
+	Level        int
+	ValueManager modules.ValueManager
+	LockManager  modules.LockManager
+	latch        sync.Mutex
 }
 
-func NewSkipList() *SkipList {
+func NewSkipList(valueManager modules.ValueManager, lockManager modules.LockManager) *SkipList {
 	rand.Seed(time.Now().Unix())
-	return &SkipList{
-		Header: NewSkipNode(0, "HEADER"),
-		Level:  0,
+	index := &SkipList{
+		ID:           atomic.AddUint64(&indexCounter, 1),
+		Level:        0,
+		ValueManager: valueManager,
+		LockManager:  lockManager,
+		latch:        sync.Mutex{},
 	}
+	index.Header = index.NewSkipNode(0, "HEADER")
+	ActiveIndex[index.ID] = index
+	return index
 }
 
-func (s *SkipList) Get(txn *records.Txn, key uint64) *records.Version {
+func (s *SkipList) Get(key uint64) *values.Value {
 	if key == 0 {
 		return nil
 	}
+
+	s.latch.Lock()
+	defer s.latch.Unlock()
 
 	node := s.Header
 	for i := s.Level; i >= 0; i-- {
@@ -58,17 +79,20 @@ func (s *SkipList) Get(txn *records.Txn, key uint64) *records.Version {
 	if node == nil || node.Key != key {
 		return nil
 	}
-	return node.Val.Traverse(txn)
+	return node.Val
 }
 
-func (s *SkipList) Put(txn *records.Txn, key uint64, val string) {
+// TODO: deal with 0!
+func (s *SkipList) MustGet(key uint64, val string) *values.Value {
 	if key == 0 {
-		return
+		return nil
 	}
 
-	updates := make([]*SkipNode, config.SkipListMaxLevel)
+	s.latch.Lock()
+	defer s.latch.Unlock()
 
 	node := s.Header
+	updates := make([]*SkipNode, config.SkipListMaxLevel)
 	for i := s.Level; i >= 0; i-- {
 		for node.Nexts[i] != nil && node.Nexts[i].Key < key {
 			node = node.Nexts[i]
@@ -78,14 +102,11 @@ func (s *SkipList) Put(txn *records.Txn, key uint64, val string) {
 
 	node = node.Nexts[0]
 	if node != nil && node.Key == key {
-		node.Val.Put(txn, val)
-		return
+		return node.Val
 	}
 
-	// TODO: install version
-	newNode := NewSkipNode(key, val)
+	newNode := s.NewSkipNode(key, val)
 	newNode.Level = getLevel()
-	txn.SetWriting(newNode.Val)
 	if newNode.Level > s.Level {
 		for i := s.Level + 1; i <= newNode.Level; i++ {
 			updates[i] = s.Header
@@ -98,11 +119,42 @@ func (s *SkipList) Put(txn *records.Txn, key uint64, val string) {
 		newNode.Nexts[i] = updates[i].Nexts[i]
 		updates[i].Nexts[i] = newNode
 	}
+	return newNode.Val
 }
 
-func (s *SkipList) Del(txn *records.Txn, key uint64) {
+// TODO: need test
+// Scan query `count` records sequentially from the one with key >= `key`
+func (s *SkipList) Scan(key uint64, count int) []*values.Value {
 	if key == 0 {
-		return
+		return nil
+	}
+
+	s.latch.Lock()
+	defer s.latch.Unlock()
+
+	node := s.Header
+	for i := s.Level; i >= 0; i-- {
+		for node.Nexts[i] != nil && node.Nexts[i].Key < key {
+			node = node.Nexts[i]
+		}
+	}
+
+	node = node.Nexts[0]
+	var result []*values.Value
+	for node != nil && count > 0 {
+		result = append(result, node.Val)
+		node = node.Nexts[0]
+		count--
+	}
+	return result
+}
+
+func (s *SkipList) Vacuum(key uint64) bool {
+	s.latch.Lock()
+	defer s.latch.Unlock()
+
+	if key == 0 {
+		return false
 	}
 
 	updates := make([]*SkipNode, s.Level+1)
@@ -116,51 +168,21 @@ func (s *SkipList) Del(txn *records.Txn, key uint64) {
 	}
 
 	node = node.Nexts[0]
-	if node == nil || node.Key != key {
-		return
-	}
-	node.Val.Del(txn)
-
-	return
-	// TODO: vacuum
-	// for i := 0; i <= s.Level; i++ {
-	// 	next := updates[i].Nexts[i]
-	// 	// TODO: if next == nil ?
-	// 	if next != nil && next.Key != key {
-	// 		break
-	// 	}
-	// 	updates[i].Nexts[i] = next.Nexts[i]
-	// }
-
-	// l := node.Level
-	// for l > 0 && s.Header.Nexts[l] == nil {
-	// 	s.Level--
-	// 	l--
-	// }
-}
-
-// Scan query `count` records sequentially from the one with key >= `key`
-// TODO: need test
-func (s *SkipList) Scan(txn *records.Txn, key uint64, count int) []*records.Version {
-	if key == 0 {
-		return nil
-	}
-
-	node := s.Header
-	for i := s.Level; i >= 0; i-- {
-		for node.Nexts[i] != nil && node.Nexts[i].Key < key {
-			node = node.Nexts[i]
+	for i := 0; i <= s.Level; i++ {
+		next := updates[i].Nexts[i]
+		// TODO: if next == nil ?
+		if next != nil && next.Key != key {
+			break
 		}
+		updates[i].Nexts[i] = next.Nexts[i]
 	}
 
-	node = node.Nexts[0]
-	var result []*records.Version
-	for node != nil && count > 0 {
-		result = append(result, node.Val.Traverse(txn))
-		node = node.Nexts[0]
-		count--
+	l := node.Level
+	for l > 0 && s.Header.Nexts[l] == nil {
+		s.Level--
+		l--
 	}
-	return result
+	return true
 }
 
 func getLevel() int {

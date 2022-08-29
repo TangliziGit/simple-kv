@@ -1,4 +1,4 @@
-package records
+package values
 
 import (
 	"math"
@@ -25,4 +25,12 @@ func NewVersion(val string) *Version {
 
 func (v *Version) IsVisible(ts uint64) bool {
 	return v.StartTime <= ts && ts < v.EndTime
+}
+
+func (v *Version) Install(commitID uint64) {
+	v.StartTime = commitID
+	v.EndTime = math.MaxUint64
+	if v.Next != nil {
+		v.Next.EndTime = commitID
+	}
 }
