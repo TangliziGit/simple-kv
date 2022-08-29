@@ -1,33 +1,45 @@
 package index
 
 import (
+	"simple-kv/records"
 	"strconv"
 	"testing"
 )
 
 func TestSkipList_Put_Basic(t *testing.T) {
+	txn := records.NewTxn()
 	s := NewSkipList()
-	s.Put(30, "30")
-	s.Put(50, "50")
-	s.Put(40, "40")
-	s.Put(20, "20")
+	s.Put(txn, 30, "30")
+	s.Put(txn, 50, "50")
+	s.Put(txn, 40, "40")
+	s.Put(txn, 20, "20")
 
-	node := s.Get(20)
+	node := s.Get(txn, 20)
 	if node == nil {
 		t.Errorf("Expect 20, got nil\n")
 	} else if node.Val != "20" {
 		t.Errorf("Expect 20, got %s\n", node.Val)
 	}
+
+	if len(txn.WriteSet) != 4 {
+		t.Errorf("Expect 4, got %v\n", txn.WriteSet)
+	}
+	if len(txn.ReadSet) != 0 {
+		t.Errorf("Expect 0, got %v\n", txn.ReadSet)
+	}
 }
 
 func TestSkipList_Put_Large(t *testing.T) {
+	const scale = 100000
+
+	txn := records.NewTxn()
 	s := NewSkipList()
-	for i := 1; i < 100000; i++ {
-		s.Put(uint64(i), strconv.Itoa(i))
+	for i := 1; i < scale; i++ {
+		s.Put(txn, uint64(i), strconv.Itoa(i))
 	}
 
-	for i := 1; i < 100000; i++ {
-		node := s.Get(uint64(i))
+	for i := 1; i < scale; i++ {
+		node := s.Get(txn, uint64(i))
 		if node == nil {
 			t.Errorf("Expect %d, got nil\n", i)
 		} else if node.Val != strconv.Itoa(i) {
@@ -35,12 +47,12 @@ func TestSkipList_Put_Large(t *testing.T) {
 		}
 	}
 
-	for i := 1; i < 100000; i++ {
-		s.Put(uint64(i), strconv.Itoa(i+1))
+	for i := 1; i < scale; i++ {
+		s.Put(txn, uint64(i), strconv.Itoa(i+1))
 	}
 
-	for i := 1; i < 100000; i++ {
-		node := s.Get(uint64(i))
+	for i := 1; i < scale; i++ {
+		node := s.Get(txn, uint64(i))
 		if node == nil {
 			t.Errorf("Expect %d, got nil\n", i+1)
 		} else if node.Val != strconv.Itoa(i+1) {
@@ -48,40 +60,40 @@ func TestSkipList_Put_Large(t *testing.T) {
 		}
 	}
 }
+
 func TestSkipList_Del_Basic(t *testing.T) {
+	txn := records.NewTxn()
 	s := NewSkipList()
-	s.Put(30, "30")
-	s.Put(50, "50")
-	s.Put(40, "40")
-	s.Put(20, "20")
+	s.Put(txn, 30, "30")
+	s.Put(txn, 50, "50")
+	s.Put(txn, 40, "40")
+	s.Put(txn, 20, "20")
 
-	s.Del(20)
+	s.Del(txn, 20)
 
-	node := s.Get(20)
+	node := s.Get(txn, 20)
 	if node != nil {
 		t.Errorf("Expect nil, got %s\n", node.Val)
 	}
 }
 
 func TestSkipList_Del_Large(t *testing.T) {
+	const scale = 100000
+
+	txn := records.NewTxn()
 	s := NewSkipList()
-	for i := 1; i < 100000; i++ {
-		s.Put(uint64(i), strconv.Itoa(i))
+	for i := 1; i < scale; i++ {
+		s.Put(txn, uint64(i), strconv.Itoa(i))
 	}
 
-	for i := 1; i < 100000; i++ {
-		s.Del(uint64(i))
+	for i := 1; i < scale; i++ {
+		s.Del(txn, uint64(i))
 	}
 
-	for i := 1; i < 100000; i++ {
-		node := s.Get(uint64(i))
-
+	for i := 1; i < scale; i++ {
+		node := s.Get(txn, uint64(i))
 		if node != nil {
 			t.Errorf("Expect nil, got %s\n", node.Val)
 		}
-	}
-
-	if s.Level != 0 {
-		t.Errorf("Expect level equals 0, got %d\n", s.Level)
 	}
 }
