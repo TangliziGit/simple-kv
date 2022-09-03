@@ -2,7 +2,7 @@ package locks
 
 import (
 	"fmt"
-	"simple-kv/txns"
+	"simple-kv/pkg/txns"
 	"sync"
 	"sync/atomic"
 )

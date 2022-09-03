@@ -1,8 +1,8 @@
 package values
 
 import (
-	"simple-kv/locks"
-	"simple-kv/txns"
+	"simple-kv/pkg/locks"
+	"simple-kv/pkg/txns"
 	"sync"
 )
 

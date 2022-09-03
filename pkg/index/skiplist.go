@@ -2,9 +2,9 @@ package index
 
 import (
 	"math/rand"
-	"simple-kv/config"
-	"simple-kv/modules"
-	"simple-kv/values"
+	"simple-kv/pkg/config"
+	modules2 "simple-kv/pkg/modules"
+	"simple-kv/pkg/values"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,12 +41,12 @@ type SkipList struct {
 	ID           uint64
 	Header       *SkipNode
 	Level        int
-	ValueManager modules.ValueManager
-	LockManager  modules.LockManager
+	ValueManager modules2.ValueManager
+	LockManager  modules2.LockManager
 	latch        sync.Mutex
 }
 
-func NewSkipList(valueManager modules.ValueManager, lockManager modules.LockManager) *SkipList {
+func NewSkipList(valueManager modules2.ValueManager, lockManager modules2.LockManager) *SkipList {
 	rand.Seed(time.Now().Unix())
 	index := &SkipList{
 		ID:           atomic.AddUint64(&indexCounter, 1),

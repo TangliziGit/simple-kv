@@ -1,7 +1,7 @@
 package modules
 
 import (
-	"simple-kv/txns"
+	"simple-kv/pkg/txns"
 )
 
 type TxnManager interface {

@@ -1,8 +1,8 @@
 package manager
 
 import (
-	"simple-kv/modules"
-	"simple-kv/txns"
+	modules2 "simple-kv/pkg/modules"
+	"simple-kv/pkg/txns"
 	"sync"
 	"sync/atomic"
 )
@@ -10,12 +10,12 @@ import (
 type TxnManager struct {
 	TxnCounter   uint64
 	ActiveTxns   map[uint64]*txns.Txn
-	ValueManager modules.ValueManager
-	GC           modules.GarbageCollector
+	ValueManager modules2.ValueManager
+	GC           modules2.GarbageCollector
 	latch        sync.Mutex
 }
 
-func NewTxnManager(valueManager modules.ValueManager) *TxnManager {
+func NewTxnManager(valueManager modules2.ValueManager) *TxnManager {
 	return &TxnManager{
 		TxnCounter:   0,
 		ActiveTxns:   map[uint64]*txns.Txn{},
@@ -25,7 +25,7 @@ func NewTxnManager(valueManager modules.ValueManager) *TxnManager {
 	}
 }
 
-func (manager *TxnManager) SetGC(gc modules.GarbageCollector) {
+func (manager *TxnManager) SetGC(gc modules2.GarbageCollector) {
 	manager.GC = gc
 }
 

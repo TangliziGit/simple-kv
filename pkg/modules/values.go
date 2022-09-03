@@ -1,8 +1,8 @@
 package modules
 
 import (
-	"simple-kv/locks"
-	"simple-kv/values"
+	"simple-kv/pkg/locks"
+	"simple-kv/pkg/values"
 )
 
 type ValueManager interface {

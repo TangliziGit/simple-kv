@@ -1,8 +1,8 @@
 package index
 
 import (
-	"simple-kv/locks/manager"
-	manager2 "simple-kv/values/manager"
+	"simple-kv/pkg/locks/manager"
+	manager2 "simple-kv/pkg/values/manager"
 	"strconv"
 	"testing"
 )

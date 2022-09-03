@@ -2,21 +2,21 @@ package gc
 
 import (
 	"math"
-	"simple-kv/index"
-	txns2 "simple-kv/modules"
-	"simple-kv/txns"
-	"simple-kv/values"
+	"simple-kv/pkg/index"
+	"simple-kv/pkg/modules"
+	"simple-kv/pkg/txns"
+	values2 "simple-kv/pkg/values"
 	"time"
 )
 
 type GarbageCollector struct {
 	cleanChan     chan *txns.Txn
 	NeedCleanTxns []*txns.Txn
-	TxnManager    txns2.TxnManager
-	ValueManager  txns2.ValueManager
+	TxnManager    modules.TxnManager
+	ValueManager  modules.ValueManager
 }
 
-func NewGarbageCollector(txnManager txns2.TxnManager, valueManager txns2.ValueManager) *GarbageCollector {
+func NewGarbageCollector(txnManager modules.TxnManager, valueManager modules.ValueManager) *GarbageCollector {
 	return &GarbageCollector{
 		// infinity chan?
 		cleanChan:     make(chan *txns.Txn, 1000),
@@ -88,8 +88,8 @@ func (g *GarbageCollector) Collect(txn *txns.Txn) bool {
 	return cleanAgain
 }
 
-func (g *GarbageCollector) Truncate(val *values.Value, commitID uint64) bool {
-	prev := values.NewVersion("")
+func (g *GarbageCollector) Truncate(val *values2.Value, commitID uint64) bool {
+	prev := values2.NewVersion("")
 	prev.Next = val.VersionHeader
 	iter := prev.Next
 	for iter != nil && !iter.IsVisible(commitID) {

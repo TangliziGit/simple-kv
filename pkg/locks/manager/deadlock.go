@@ -1,9 +1,9 @@
 package manager
 
 import (
-	"simple-kv/locks"
-	"simple-kv/modules"
-	"simple-kv/txns"
+	"simple-kv/pkg/locks"
+	modules2 "simple-kv/pkg/modules"
+	"simple-kv/pkg/txns"
 	"sync"
 	"time"
 )
@@ -30,13 +30,13 @@ func NewNode(isTxn bool, txn *txns.Txn, lock *locks.RWLock) *Node {
 }
 
 type DeadlockDetector struct {
-	TxnManager   modules.TxnManager
-	ValueManager modules.ValueManager
+	TxnManager   modules2.TxnManager
+	ValueManager modules2.ValueManager
 	LockManager  *LockManager
 	latch        sync.Mutex
 }
 
-func NewDeadlockDetector(txnManager modules.TxnManager, valueManager modules.ValueManager,
+func NewDeadlockDetector(txnManager modules2.TxnManager, valueManager modules2.ValueManager,
 	lockManager *LockManager) *DeadlockDetector {
 	return &DeadlockDetector{
 		TxnManager:   txnManager,

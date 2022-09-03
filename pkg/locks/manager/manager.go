@@ -1,7 +1,7 @@
 package manager
 
 import (
-	"simple-kv/locks"
+	"simple-kv/pkg/locks"
 	"sync"
 )
 

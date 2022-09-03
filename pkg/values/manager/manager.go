@@ -1,8 +1,8 @@
 package manager
 
 import (
-	"simple-kv/locks"
-	"simple-kv/values"
+	"simple-kv/pkg/locks"
+	"simple-kv/pkg/values"
 	"sync"
 	"sync/atomic"
 )

@@ -1,4 +1,4 @@
-package engine
+package engines
 
 import (
 	"strconv"
@@ -8,7 +8,7 @@ import (
 )
 
 func Test1(t *testing.T) {
-	engine := NewEngine()
+	engine := NewUint64Engine()
 
 	txn1 := engine.NewTxn()
 	_ = engine.Put(txn1, 30, "30")
@@ -30,7 +30,7 @@ func Test1(t *testing.T) {
 }
 
 func Test2(t *testing.T) {
-	engine := NewEngine()
+	engine := NewUint64Engine()
 
 	txn1 := engine.NewTxn()
 	_ = engine.Put(txn1, 30, "30")
@@ -51,7 +51,7 @@ func Test2(t *testing.T) {
 }
 
 func Test3_Deadlock(t *testing.T) {
-	engine := NewEngine().Run()
+	engine := NewUint64Engine().Run()
 
 	done := sync.WaitGroup{}
 	done.Add(2)
@@ -93,7 +93,7 @@ func Test3_Deadlock(t *testing.T) {
 
 func Test4_Vacuum(t *testing.T) {
 	const scale = 1000
-	engine := NewEngine().Run()
+	engine := NewUint64Engine().Run()
 
 	for i := 0; i < scale; i++ {
 		txn := engine.NewTxn()
@@ -125,7 +125,7 @@ func Test4_Vacuum(t *testing.T) {
 
 func Test5_Concurrency(t *testing.T) {
 	const scale = 200000
-	engine := NewEngine().Run()
+	engine := NewUint64Engine().Run()
 
 	done := sync.WaitGroup{}
 	done.Add(scale - 1)
@@ -150,6 +150,40 @@ func Test5_Concurrency(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		} else if val != strconv.Itoa(i) {
+			t.Logf("Expect %d, got %s", i, val)
+		}
+	}
+}
+
+func Test6_StringEngine_Concurrency(t *testing.T) {
+	const scale = 100000
+	engine := NewStringEngine().Run()
+
+	done := sync.WaitGroup{}
+	done.Add(scale - 1)
+	for i := 1; i < scale; i++ {
+		go func(i int) {
+			txn := engine.NewTxn()
+			defer txn.Commit()
+
+			key := strconv.Itoa(i)
+			err := engine.Put(txn, key, key)
+			if err != nil {
+				t.Error(err)
+			}
+			done.Done()
+		}(i)
+	}
+
+	done.Wait()
+	txn := engine.NewTxn()
+	defer txn.Commit()
+	for i := 1; i < scale; i++ {
+		key := strconv.Itoa(i)
+		val, err := engine.Get(txn, key)
+		if err != nil {
+			t.Error(err)
+		} else if val != key {
 			t.Logf("Expect %d, got %s", i, val)
 		}
 	}
