@@ -75,7 +75,7 @@ func (e *Uint64Engine) Put(txn *txns.Txn, key uint64, value string) error {
 	return nil
 }
 
-func (e *Uint64Engine) Del(txn *txns.Txn, key uint64, value string) error {
+func (e *Uint64Engine) Del(txn *txns.Txn, key uint64) error {
 	val := e.Index.Get(key)
 	if val == nil {
 		return nil

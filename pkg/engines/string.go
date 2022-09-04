@@ -39,8 +39,8 @@ func (e *StringEngine) Put(txn *txns.Txn, key string, value string) error {
 	return e.uint64Engine.Put(txn, hash(key), value)
 }
 
-func (e *StringEngine) Del(txn *txns.Txn, key string, value string) error {
-	return e.uint64Engine.Del(txn, hash(key), value)
+func (e *StringEngine) Del(txn *txns.Txn, key string) error {
+	return e.uint64Engine.Del(txn, hash(key))
 }
 
 func (e *StringEngine) Scan(txn *txns.Txn, key string, count int) (res []string, err error) {
