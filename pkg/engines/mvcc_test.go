@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func Test1(t *testing.T) {
+func Test_Basic(t *testing.T) {
 	engine := NewUint64Engine()
 
 	txn1 := engine.NewTxn()
@@ -29,7 +29,7 @@ func Test1(t *testing.T) {
 	txn3.Commit()
 }
 
-func Test2(t *testing.T) {
+func Test_Basic2(t *testing.T) {
 	engine := NewUint64Engine()
 
 	txn1 := engine.NewTxn()
@@ -50,7 +50,7 @@ func Test2(t *testing.T) {
 	txn3.Commit()
 }
 
-func Test3_Deadlock(t *testing.T) {
+func Test_Deadlock(t *testing.T) {
 	engine := NewUint64Engine().Run()
 
 	done := sync.WaitGroup{}
@@ -91,7 +91,7 @@ func Test3_Deadlock(t *testing.T) {
 	done.Wait()
 }
 
-func Test4_Vacuum(t *testing.T) {
+func Test_Vacuum(t *testing.T) {
 	const scale = 1000
 	engine := NewUint64Engine().Run()
 
@@ -123,7 +123,7 @@ func Test4_Vacuum(t *testing.T) {
 	txn.Commit()
 }
 
-func Test5_Concurrency(t *testing.T) {
+func Test_Concurrency(t *testing.T) {
 	const scale = 200000
 	engine := NewUint64Engine().Run()
 
@@ -150,12 +150,12 @@ func Test5_Concurrency(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		} else if val != strconv.Itoa(i) {
-			t.Logf("Expect %d, got %s", i, val)
+			t.Fatalf("Expect %d, got %s", i, val)
 		}
 	}
 }
 
-func Test6_StringEngine_Concurrency(t *testing.T) {
+func Test_StringEngine_Concurrency(t *testing.T) {
 	const scale = 100000
 	engine := NewStringEngine().Run()
 
@@ -184,7 +184,153 @@ func Test6_StringEngine_Concurrency(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		} else if val != key {
-			t.Logf("Expect %d, got %s", i, val)
+			t.Fatalf("Expect %d, got %s", i, val)
 		}
+	}
+}
+
+func Test_DirtyWrite(t *testing.T) {
+	engine := NewStringEngine().Run()
+
+	done := &sync.WaitGroup{}
+	done.Add(2)
+
+	t1 := NewThread(done).Run()
+	t2 := NewThread(done).Run()
+
+	txn1 := engine.NewTxn()
+	txn2 := engine.NewTxn()
+	t1.Do(func() bool {
+		err := engine.Put(txn1, "A", "1")
+		if err != nil {
+			t.Error(err)
+		}
+		return false
+	})
+
+	time.Sleep(time.Millisecond)
+	t2.Do(func() bool {
+		err := engine.Put(txn2, "A", "2")
+		if err != nil {
+			t.Error(err)
+		}
+		txn2.Commit()
+		return true
+	})
+
+	t1.Do(func() bool {
+		txn1.Abort()
+		return true
+	})
+	done.Wait()
+
+	txn := engine.NewTxn()
+	defer txn.Commit()
+	val, err := engine.Get(txn, "A")
+	if err != nil {
+		t.Error(err)
+	}
+
+	if val != "2" {
+		t.Logf("Expect %s, got %s\n", "2", val)
+	}
+}
+
+func Test_DirtyRead(t *testing.T) {
+	engine := NewStringEngine().Run()
+
+	done := &sync.WaitGroup{}
+	done.Add(2)
+
+	t1 := NewThread(done).Run()
+	t2 := NewThread(done).Run()
+
+	txn1 := engine.NewTxn()
+	txn2 := engine.NewTxn()
+	t1.Do(func() bool {
+		err := engine.Put(txn1, "A", "1")
+		if err != nil {
+			t.Error(err)
+		}
+		return false
+	})
+
+	t2.Do(func() bool {
+		val, err := engine.Get(txn2, "A")
+		if err == nil {
+			t.Fatalf("Expect err, but got val=%v", val)
+		}
+
+		txn2.Commit()
+		return true
+	})
+
+	t1.Do(func() bool {
+		txn1.Abort()
+		return true
+	})
+	done.Wait()
+}
+
+func Test_LostUpdate(t *testing.T) {
+	engine := NewStringEngine().Run()
+
+	txn := engine.NewTxn()
+	_ = engine.Put(txn, "A", "Null")
+	txn.Commit()
+
+	done := &sync.WaitGroup{}
+	done.Add(2)
+
+	t1 := NewThread(done).Run()
+	t2 := NewThread(done).Run()
+
+	txn1 := engine.NewTxn()
+	txn2 := engine.NewTxn()
+	var tmp string
+	t1.Do(func() bool {
+		var err error
+		tmp, err = engine.Get(txn1, "A")
+		if err != nil {
+			t.Error(err)
+		}
+		return false
+	})
+
+	t2.Do(func() bool {
+		val, err := engine.Get(txn2, "A")
+		if err != nil {
+			t.Error(err)
+		}
+
+		err = engine.Put(txn1, "A", val+":t2")
+		if err != nil {
+			t.Error(err)
+		}
+
+		txn2.Commit()
+		return true
+	})
+
+	t1.Do(func() bool {
+		err := engine.Put(txn1, "A", tmp+":t1")
+		if err != nil {
+			t.Error(err)
+		}
+
+		txn1.Commit()
+		return true
+	})
+	done.Wait()
+
+	txn = engine.NewTxn()
+	defer txn.Commit()
+	val, err := engine.Get(txn, "A")
+	if err != nil {
+		t.Error(err)
+	}
+
+	if val != "Null:t2:t1" {
+		t.Fatalf("Expect Null:t2:t1, got %s\n", val)
 	}
 }
