@@ -19,6 +19,7 @@ const (
 	Abort
 
 	None
+	Error
 	String
 	Strings
 
@@ -44,6 +45,8 @@ func ToCommandType(t string) CommandType {
 		return Abort
 	case "NONE":
 		return None
+	case "ERROR":
+		return Error
 	case "STRING":
 		return String
 	case "STRINGS":
@@ -63,6 +66,15 @@ func NewCommand(t CommandType, payload []string) *Command {
 	return &Command{
 		PayloadLength: calcPayloadLength(payload),
 		Type:          t,
+		Payload:       payload,
+	}
+}
+
+func NewErrorCommand(err error) *Command {
+	payload := []string{err.Error()}
+	return &Command{
+		PayloadLength: calcPayloadLength(payload),
+		Type:          Error,
 		Payload:       payload,
 	}
 }
@@ -118,7 +130,7 @@ func parsePayload(buffer []byte, length uint64) []string {
 
 func (c *Command) Serialize() []byte {
 	c.PayloadLength = calcPayloadLength(c.Payload)
-	buffer := make([]byte, 8+c.PayloadLength)
+	buffer := make([]byte, CommandHeaderLength+c.PayloadLength)
 	binary.BigEndian.PutUint64(buffer, c.PayloadLength)
 	buffer[8] = byte(c.Type)
 

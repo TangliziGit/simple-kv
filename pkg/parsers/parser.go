@@ -31,19 +31,24 @@ func (p *Parser) Parse(input string) (*protos.Command, error) {
 		return nil, err
 	}
 
-	next, err = p.dropSpaces(next)
-	if err != nil {
-		return nil, err
-	}
-
 	var content []string
 	switch t {
 	case protos.Get, protos.Del:
+		next, err = p.dropSpaces(next)
+		if err != nil {
+			return nil, err
+		}
+
 		var key string
 		key, next, err = p.getString(next)
 		content = append(content, key)
 
 	case protos.Put:
+		next, err = p.dropSpaces(next)
+		if err != nil {
+			return nil, err
+		}
+
 		var key, val string
 		if key, next, err = p.getString(next); err != nil {
 			break
@@ -57,6 +62,11 @@ func (p *Parser) Parse(input string) (*protos.Command, error) {
 		content = append(content, key, val)
 
 	case protos.Scan:
+		next, err = p.dropSpaces(next)
+		if err != nil {
+			return nil, err
+		}
+
 		var key, count string
 		if key, next, err = p.getString(next); err != nil {
 			break
@@ -71,10 +81,20 @@ func (p *Parser) Parse(input string) (*protos.Command, error) {
 
 	case protos.Begin, protos.Commit, protos.Abort:
 		err = nil
+	default:
+		err = fmt.Errorf("invalid type:\n%s", p.errorOn(next-1))
 	}
 
 	if err != nil {
 		return nil, err
+	}
+
+	if next != p.Length {
+		next, _ = p.dropSpaces(next)
+	}
+
+	if next != p.Length {
+		return nil, fmt.Errorf("command should terminated here:\n%s", p.errorOn(next))
 	}
 
 	return protos.NewCommand(t, content), nil
@@ -118,7 +138,7 @@ func (p *Parser) getString(i int) (string, int, error) {
 		return "", j, fmt.Errorf("a quotation mark needed here:\n%s", p.errorOn(j))
 	}
 
-	return p.Input[i:j], j + 1, nil
+	return p.Input[i+1 : j], j + 1, nil
 }
 
 func (p *Parser) getType(i int) (protos.CommandType, int, error) {

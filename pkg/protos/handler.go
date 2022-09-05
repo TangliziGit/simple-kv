@@ -30,12 +30,12 @@ func (h *Handler) Handle(conn net.Conn) {
 		req, err = ParseCommand(conn)
 		if err != nil {
 			// TODO: log
-			// TODO: resp = command.FromError()
+			resp = NewErrorCommand(err)
 		} else {
 			resp, err = h.Execute(req)
 			if err != nil {
 				// TODO: log
-				// TODO: resp = command.FromError()
+				resp = NewErrorCommand(err)
 			}
 		}
 
@@ -47,11 +47,12 @@ func (h *Handler) Handle(conn net.Conn) {
 }
 
 func (h *Handler) Execute(req *Command) (resp *Command, err error) {
-	if h.session.GetTxn() == nil && req.Type != Begin {
+	isLocalTxn := h.session.GetTxn() == nil && req.Type != Begin
+	if isLocalTxn {
 		h.session.SetTxn(h.engine.NewTxn())
-		defer h.session.GetTxn().Commit()
 	}
 
+	resp = &Command{}
 	txn := h.session.GetTxn()
 	switch req.Type {
 	case Get:
@@ -78,13 +79,23 @@ func (h *Handler) Execute(req *Command) (resp *Command, err error) {
 
 	case Begin:
 		h.session.SetTxn(h.engine.NewTxn())
+		resp.Type = None
 	case Commit:
 		// TODO: error
 		h.session.GetTxn().Commit()
+		h.session.SetTxn(nil)
+		resp.Type = None
 	case Abort:
 		h.session.GetTxn().Abort()
+		h.session.SetTxn(nil)
+		resp.Type = None
 	default:
-		return nil, fmt.Errorf("invalid command type: type=%v", req.Type)
+		err = fmt.Errorf("invalid command type: type=%v", req.Type)
+	}
+
+	if isLocalTxn {
+		h.session.GetTxn().Commit()
+		h.session.SetTxn(nil)
 	}
 	return
 }
