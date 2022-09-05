@@ -1,7 +1,6 @@
 package engines
 
 import (
-	"fmt"
 	"strconv"
 	"sync"
 	"testing"
@@ -290,18 +289,15 @@ func Test_LostUpdate(t *testing.T) {
 	txn2 := engine.NewTxn()
 	var tmp string
 	t1.Do(func() bool {
-		fmt.Println("1")
 		var err error
 		tmp, err = engine.Get(txn1, "A")
 		if err != nil {
 			t.Error(err)
 		}
-		fmt.Println("1")
 		return false
 	})
 
 	t2.Do(func() bool {
-		fmt.Println("2")
 		val, err := engine.Get(txn2, "A")
 		if err != nil {
 			t.Error(err)
@@ -313,19 +309,16 @@ func Test_LostUpdate(t *testing.T) {
 		}
 
 		txn2.Commit()
-		fmt.Println("2")
 		return true
 	})
 
 	t1.Do(func() bool {
-		fmt.Println("3")
 		err := engine.Put(txn1, "A", tmp+":t1")
 		if err != nil {
 			t.Log(err)
 		}
 
 		txn1.Commit()
-		fmt.Println("3")
 		return true
 	})
 	done.Wait()
@@ -341,5 +334,127 @@ func Test_LostUpdate(t *testing.T) {
 	expect := []string{"Null:t2", "Null:t1"}
 	if val != expect[0] && val != expect[1] {
 		t.Fatalf("Expect %v, got %s\n", expect, val)
+	}
+}
+
+func Test_NonrepeatableRead(t *testing.T) {
+	engine := NewStringEngine().Run()
+
+	txn := engine.NewTxn()
+	_ = engine.Put(txn, "A", "Null")
+	txn.Commit()
+
+	done := &sync.WaitGroup{}
+	done.Add(2)
+
+	t1 := NewThread(done).Run()
+	t2 := NewThread(done).Run()
+
+	txn1 := engine.NewTxn()
+	txn2 := engine.NewTxn()
+	t1.Do(func() bool {
+		val, err := engine.Get(txn1, "A")
+		if err != nil {
+			t.Error(err)
+		}
+		if val != "Null" {
+			t.Fatalf("Expect %v, got %s\n", "Null", val)
+		}
+		return false
+	})
+
+	t2.Do(func() bool {
+		err := engine.Put(txn2, "A", "txn2")
+		if err != nil {
+			t.Error(err)
+		}
+		txn2.Commit()
+		return true
+	})
+
+	t1.Do(func() bool {
+		val, err := engine.Get(txn1, "A")
+		if err != nil {
+			t.Error(err)
+		}
+		if val != "Null" {
+			t.Fatalf("Expect %v, got %s\n", "Null", val)
+		}
+		txn1.Commit()
+		return true
+	})
+	done.Wait()
+
+	txn = engine.NewTxn()
+	defer txn.Commit()
+	val, _ := engine.Get(txn, "A")
+	if val != "txn2" {
+		t.Fatalf("Expect txn2, got %s\n", val)
+	}
+}
+
+func Test_ReadSkew(t *testing.T) {
+	engine := NewStringEngine().Run()
+
+	txn := engine.NewTxn()
+	_ = engine.Put(txn, "A", "5")
+	_ = engine.Put(txn, "B", "5")
+	txn.Commit()
+
+	done := &sync.WaitGroup{}
+	done.Add(2)
+
+	t1 := NewThread(done).Run()
+	t2 := NewThread(done).Run()
+
+	txn1 := engine.NewTxn()
+	txn2 := engine.NewTxn()
+	t1.Do(func() bool {
+		val, err := engine.Get(txn1, "A")
+		if err != nil {
+			t.Error(err)
+		}
+		if val != "5" {
+			t.Fatalf("Expect %v, got %s\n", "5", val)
+		}
+		return false
+	})
+
+	t2.Do(func() bool {
+		err := engine.Put(txn2, "A", "0")
+		if err != nil {
+			t.Error(err)
+		}
+		err = engine.Put(txn2, "B", "10")
+		if err != nil {
+			t.Error(err)
+		}
+		txn2.Commit()
+		return true
+	})
+
+	t1.Do(func() bool {
+		val, err := engine.Get(txn1, "B")
+		if err != nil {
+			t.Error(err)
+		}
+		if val != "5" {
+			t.Fatalf("Expect %v, got %s\n", "5", val)
+		}
+		txn1.Commit()
+		return true
+	})
+	done.Wait()
+
+	txn = engine.NewTxn()
+	defer txn.Commit()
+	A, _ := engine.Get(txn, "A")
+	if A != "0" {
+		t.Fatalf("Expect 0, got %s\n", A)
+	}
+
+	B, _ := engine.Get(txn, "B")
+	if B != "10" {
+		t.Fatalf("Expect 10, got %s\n", B)
 	}
 }

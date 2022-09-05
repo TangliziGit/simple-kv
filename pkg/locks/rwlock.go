@@ -125,9 +125,9 @@ func (l *RWLock) wait(txn *txns.Txn, isRead bool) error {
 	return nil
 }
 
-func (l *RWLock) nextTask() {
+func (l *RWLock) nextTask() bool {
 	if l.WaitingHead == nil {
-		return
+		return false
 	}
 
 	if l.WaitingHead.IsRead {
@@ -147,6 +147,7 @@ func (l *RWLock) nextTask() {
 	if l.WaitingHead == nil {
 		l.WaitingTail = nil
 	}
+	return true
 }
 
 // TODO: unreenterable
@@ -171,16 +172,21 @@ func (l *RWLock) RLock(txn *txns.Txn) error {
 
 func (l *RWLock) RUnlock(txn *txns.Txn) {
 	l.Latch.Lock()
-	defer l.Latch.Unlock()
 
 	// ASSERT: reading count > 0
 	delete(l.ReadingTxnIDs, txn.ID)
+	boardcast := false
 	count := len(l.ReadingTxnIDs)
 	if count == 1 {
 		l.tryUpgrade()
 	} else if count == 0 {
 		l.Op.InactiveLock(l)
-		l.nextTask()
+		boardcast = l.nextTask()
+	}
+	l.Latch.Unlock()
+
+	if boardcast {
+		l.Condition.Broadcast()
 	}
 }
 
