@@ -47,7 +47,7 @@ func NewDeadlockDetector(txnManager modules2.TxnManager, valueManager modules2.V
 }
 
 func (d *DeadlockDetector) Run() {
-	for _ = range time.Tick(time.Millisecond * 50) {
+	for _ = range time.Tick(time.Millisecond * 500) {
 		d.Detect()
 	}
 }
@@ -122,7 +122,7 @@ func (d *DeadlockDetector) Detect() {
 		}
 
 		for node := range nodes {
-			if node.isTxn == false {
+			if node.isTxn == false || node.Txn.Waiting == false {
 				continue
 			}
 

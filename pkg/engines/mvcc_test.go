@@ -1,6 +1,7 @@
 package engines
 
 import (
+	"fmt"
 	"strconv"
 	"sync"
 	"testing"
@@ -289,36 +290,42 @@ func Test_LostUpdate(t *testing.T) {
 	txn2 := engine.NewTxn()
 	var tmp string
 	t1.Do(func() bool {
+		fmt.Println("1")
 		var err error
 		tmp, err = engine.Get(txn1, "A")
 		if err != nil {
 			t.Error(err)
 		}
+		fmt.Println("1")
 		return false
 	})
 
 	t2.Do(func() bool {
+		fmt.Println("2")
 		val, err := engine.Get(txn2, "A")
 		if err != nil {
 			t.Error(err)
 		}
 
-		err = engine.Put(txn1, "A", val+":t2")
+		err = engine.Put(txn2, "A", val+":t2")
 		if err != nil {
 			t.Error(err)
 		}
 
 		txn2.Commit()
+		fmt.Println("2")
 		return true
 	})
 
 	t1.Do(func() bool {
+		fmt.Println("3")
 		err := engine.Put(txn1, "A", tmp+":t1")
 		if err != nil {
-			t.Error(err)
+			t.Log(err)
 		}
 
 		txn1.Commit()
+		fmt.Println("3")
 		return true
 	})
 	done.Wait()
@@ -330,7 +337,9 @@ func Test_LostUpdate(t *testing.T) {
 		t.Error(err)
 	}
 
-	if val != "Null:t2:t1" {
-		t.Fatalf("Expect Null:t2:t1, got %s\n", val)
+	// one of two txns should be aborted
+	expect := []string{"Null:t2", "Null:t1"}
+	if val != expect[0] && val != expect[1] {
+		t.Fatalf("Expect %v, got %s\n", expect, val)
 	}
 }

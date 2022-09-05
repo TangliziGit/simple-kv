@@ -30,6 +30,7 @@ type Operator interface {
 type Txn struct {
 	ID       uint64
 	State    State
+	Waiting  bool
 	CommitID uint64
 	// ReadSet is to release read lock
 	ReadSet map[uint64]struct{}

@@ -33,6 +33,7 @@ func (manager *TxnManager) NewTxn() *txns.Txn {
 	txn := &txns.Txn{
 		ID:       atomic.AddUint64(&manager.TxnCounter, 1),
 		State:    txns.Processing,
+		Waiting:  false,
 		ReadSet:  map[uint64]struct{}{},
 		WriteSet: map[uint64]*txns.WriteInfo{},
 		Latch:    sync.Mutex{},

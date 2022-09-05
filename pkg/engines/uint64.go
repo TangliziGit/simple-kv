@@ -41,6 +41,9 @@ func (e *Uint64Engine) Run() *Uint64Engine {
 }
 
 func (e *Uint64Engine) GetVersion(txn *txns.Txn, key uint64) (*values.Version, error) {
+	if txn.State != txns.Processing {
+		return nil, fmt.Errorf("transaction has been done: status=%v", txn.State)
+	}
 	val := e.Index.Get(key)
 	if val == nil {
 		return nil, fmt.Errorf("no such key: %d", key)
@@ -50,6 +53,9 @@ func (e *Uint64Engine) GetVersion(txn *txns.Txn, key uint64) (*values.Version, e
 }
 
 func (e *Uint64Engine) Get(txn *txns.Txn, key uint64) (string, error) {
+	if txn.State != txns.Processing {
+		return "", fmt.Errorf("transaction has been done: status=%v", txn.State)
+	}
 	val := e.Index.Get(key)
 	if val == nil {
 		return "", fmt.Errorf("no such key: %d", key)
@@ -63,6 +69,9 @@ func (e *Uint64Engine) Get(txn *txns.Txn, key uint64) (string, error) {
 }
 
 func (e *Uint64Engine) Put(txn *txns.Txn, key uint64, value string) error {
+	if txn.State != txns.Processing {
+		return fmt.Errorf("transaction has been done: status=%v", txn.State)
+	}
 	val := e.Index.MustGet(key, value)
 	writing, err := val.Put(txn, value)
 	if err != nil {
@@ -76,6 +85,9 @@ func (e *Uint64Engine) Put(txn *txns.Txn, key uint64, value string) error {
 }
 
 func (e *Uint64Engine) Del(txn *txns.Txn, key uint64) error {
+	if txn.State != txns.Processing {
+		return fmt.Errorf("transaction has been done: status=%v", txn.State)
+	}
 	val := e.Index.Get(key)
 	if val == nil {
 		return nil
@@ -90,6 +102,9 @@ func (e *Uint64Engine) Del(txn *txns.Txn, key uint64) error {
 
 // Scan query `count` records sequentially from the one with key >= `key`
 func (e *Uint64Engine) Scan(txn *txns.Txn, key uint64, count int) (res []string, err error) {
+	if txn.State != txns.Processing {
+		return nil, fmt.Errorf("transaction has been done: status=%v", txn.State)
+	}
 	for _, val := range e.Index.Scan(key, count) {
 		version, err := val.Traverse(txn)
 		if err != nil {

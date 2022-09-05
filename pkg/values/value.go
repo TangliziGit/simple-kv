@@ -46,7 +46,9 @@ func (v *Value) Traverse(txn *txns.Txn) (*Version, error) {
 	}
 
 	if version.IsVisible(txn.ID) {
+		v.Latch.Unlock()
 		err := v.HeaderLock.RLock(txn)
+		v.Latch.Lock()
 		if err != nil {
 			return nil, err
 		}
@@ -69,7 +71,9 @@ func (v *Value) Put(txn *txns.Txn, val string) (bool, error) {
 	defer v.Latch.Unlock()
 
 	if v.HeaderLock.WritingTxnID != txn.ID {
+		v.Latch.Unlock()
 		err := v.HeaderLock.Lock(txn)
+		v.Latch.Lock()
 		if err != nil {
 			return false, err
 		}
@@ -100,7 +104,9 @@ func (v *Value) Del(txn *txns.Txn) (bool, error) {
 	defer v.Latch.Unlock()
 
 	if v.HeaderLock.WritingTxnID != txn.ID {
+		v.Latch.Unlock()
 		err := v.HeaderLock.Lock(txn)
+		v.Latch.Lock()
 		if err != nil {
 			return false, err
 		}

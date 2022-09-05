@@ -91,6 +91,9 @@ func (l *RWLock) CancelTask(txn *txns.Txn) {
 	if l.WaitingHead.Txn == txn {
 		l.WaitingHead.Txn = nil
 		l.WaitingHead = l.WaitingHead.Next
+		if l.WaitingHead == nil {
+			l.WaitingTail = nil
+		}
 		return
 	}
 
@@ -100,6 +103,9 @@ func (l *RWLock) CancelTask(txn *txns.Txn) {
 			continue
 		}
 
+		if head.Next == l.WaitingTail {
+			l.WaitingTail = head
+		}
 		head.Next.Txn = nil
 		head.Next = head.Next.Next
 		break
@@ -107,12 +113,12 @@ func (l *RWLock) CancelTask(txn *txns.Txn) {
 }
 
 func (l *RWLock) wait(txn *txns.Txn, isRead bool) error {
+	txn.Waiting = true
 	task := l.PushTask(txn, isRead)
-	// l.CondMutex.Lock()
 	if task.Txn != nil && task.ID > l.AllowTaskID {
 		l.Condition.Wait()
 	}
-	// l.CondMutex.Unlock()
+	txn.Waiting = false
 	if task.Txn == nil {
 		return fmt.Errorf("txn aborted since deadlock occured")
 	}
@@ -137,6 +143,10 @@ func (l *RWLock) nextTask() {
 		l.AllowTaskID = l.WaitingHead.ID
 		l.PopTask()
 	}
+
+	if l.WaitingHead == nil {
+		l.WaitingTail = nil
+	}
 }
 
 // TODO: unreenterable
@@ -145,6 +155,7 @@ func (l *RWLock) RLock(txn *txns.Txn) error {
 	l.Latch.Lock()
 	defer l.Latch.Unlock()
 
+	// write task prior
 	if l.WritingTxnID != 0 || l.WaitingHead != nil {
 		err := l.wait(txn, true)
 		if err != nil {
@@ -164,10 +175,13 @@ func (l *RWLock) RUnlock(txn *txns.Txn) {
 
 	// ASSERT: reading count > 0
 	delete(l.ReadingTxnIDs, txn.ID)
-	if len(l.ReadingTxnIDs) == 0 {
+	count := len(l.ReadingTxnIDs)
+	if count == 1 {
+		l.tryUpgrade()
+	} else if count == 0 {
+		l.Op.InactiveLock(l)
 		l.nextTask()
 	}
-	l.Op.InactiveLock(l)
 }
 
 // TODO: unreenterable
@@ -175,7 +189,7 @@ func (l *RWLock) Lock(txn *txns.Txn) error {
 	l.Latch.Lock()
 	defer l.Latch.Unlock()
 
-	if l.WritingTxnID != 0 || l.WaitingHead != nil {
+	if atomic.LoadUint64(&l.WritingTxnID) != 0 || len(l.ReadingTxnIDs) != 0 {
 		err := l.wait(txn, false)
 		if err != nil {
 			return err
@@ -195,5 +209,44 @@ func (l *RWLock) Unlock(_ *txns.Txn) {
 	l.nextTask()
 	l.Latch.Unlock()
 
+	l.Condition.Broadcast()
+}
+
+// TODO: need test
+func (l *RWLock) tryUpgrade() {
+	if len(l.ReadingTxnIDs) != 1 || l.WaitingHead == nil {
+		return
+	}
+
+	var txnID uint64
+	for t := range l.ReadingTxnIDs {
+		txnID = t
+	}
+
+	if l.WaitingHead.Txn.ID == txnID {
+		l.WaitingHead.ID = l.AllowTaskID
+		l.WaitingHead.Txn.Waiting = false
+		l.WaitingHead = l.WaitingHead.Next
+		delete(l.ReadingTxnIDs, txnID)
+		l.Op.InactiveLock(l)
+		l.Condition.Broadcast()
+		return
+	}
+
+	prev := l.WaitingHead
+	task := prev.Next
+	for task != nil && task.Txn.ID != txnID {
+		task = task.Next
+	}
+
+	if task == nil {
+		return
+	}
+
+	task.ID = l.AllowTaskID
+	task.Txn.Waiting = false
+	prev.Next = task.Next
+	delete(l.ReadingTxnIDs, txnID)
+	l.Op.InactiveLock(l)
 	l.Condition.Broadcast()
 }
