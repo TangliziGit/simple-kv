@@ -3,16 +3,31 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/jessevdk/go-flags"
 	"net"
 	"os"
 	"simple-kv/pkg/parsers"
 	"simple-kv/pkg/protos"
 )
 
+var opts struct {
+	Host string `value-name:"host" short:"h" long:"host" default:"localhost" description:"simple-kv server host"`
+	Port string `value-name:"port" short:"p" long:"port" default:"8081" description:"simple-kv server port"`
+}
+
 func main() {
-	// TODO: go-flags
-	if err := Interact("localhost", "8080"); err != nil {
-		panic(err)
+	_, err := flags.Parse(&opts)
+	if err != nil {
+		if flags.WroteHelp(err) {
+			return
+		} else {
+			panic(err)
+		}
+	}
+
+	err = Interact(opts.Host, opts.Port)
+	if err != nil {
+		fmt.Println(err.Error())
 	}
 }
 
@@ -28,7 +43,7 @@ func Interact(hostname string, port string) error {
 	reader := bufio.NewReader(os.Stdin)
 	parser := parsers.NewParser()
 	for {
-		fmt.Printf("[%s] $ ", addr)
+		fmt.Printf("[%s]> ", addr)
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Printf("%s %s\n", ErrorSymbol, err.Error())

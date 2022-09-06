@@ -2,8 +2,10 @@ package protos
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"simple-kv/pkg/engines"
+	"simple-kv/pkg/logger"
 	"strconv"
 )
 
@@ -29,19 +31,34 @@ func (h *Handler) Handle(conn net.Conn) {
 	for {
 		req, err = ParseCommand(conn)
 		if err != nil {
-			// TODO: log
-			resp = NewErrorCommand(err)
+			if err == io.EOF {
+				logger.Inst.Warn("connection closed",
+					"command", req,
+					"err", err)
+				_ = conn.Close()
+				break
+			} else {
+				logger.Inst.Warn("fail to parse command",
+					"command", req,
+					"err", err)
+				resp = NewErrorCommand(err)
+			}
 		} else {
 			resp, err = h.Execute(req)
 			if err != nil {
-				// TODO: log
+				logger.Inst.Warn("fail to execute command",
+					"command", req,
+					"err", err)
 				resp = NewErrorCommand(err)
 			}
 		}
 
 		err = resp.Send(conn)
 		if err != nil {
-			// TODO: log
+			logger.Inst.Warn("fail to send command",
+				"req", req,
+				"resp", resp,
+				"err", err)
 		}
 	}
 }
@@ -80,22 +97,28 @@ func (h *Handler) Execute(req *Command) (resp *Command, err error) {
 	case Begin:
 		h.session.SetTxn(h.engine.NewTxn())
 		resp.Type = None
+
 	case Commit:
-		// TODO: error
-		h.session.GetTxn().Commit()
-		h.session.SetTxn(nil)
-		resp.Type = None
+		err = h.session.GetTxn().Commit()
+		if err != nil {
+			h.session.SetTxn(nil)
+			resp.Type = None
+		}
+
 	case Abort:
-		h.session.GetTxn().Abort()
-		h.session.SetTxn(nil)
-		resp.Type = None
+		err = h.session.GetTxn().Abort()
+		if err != nil {
+			h.session.SetTxn(nil)
+			resp.Type = None
+		}
+
 	default:
 		err = fmt.Errorf("invalid command type: type=%v", req.Type)
 	}
 
 	if isLocalTxn {
-		h.session.GetTxn().Commit()
+		err = h.session.GetTxn().Commit()
 		h.session.SetTxn(nil)
 	}
-	return
+	return resp, err
 }

@@ -7,8 +7,6 @@ import (
 	"sync/atomic"
 )
 
-// TODO: need test
-
 var taskCounter = uint64(0)
 
 type Task struct {
@@ -150,8 +148,6 @@ func (l *RWLock) nextTask() bool {
 	return true
 }
 
-// TODO: unreenterable
-// TODO: error
 func (l *RWLock) RLock(txn *txns.Txn) error {
 	l.Latch.Lock()
 	defer l.Latch.Unlock()
@@ -190,7 +186,6 @@ func (l *RWLock) RUnlock(txn *txns.Txn) {
 	}
 }
 
-// TODO: unreenterable
 func (l *RWLock) Lock(txn *txns.Txn) error {
 	l.Latch.Lock()
 	defer l.Latch.Unlock()
@@ -218,7 +213,6 @@ func (l *RWLock) Unlock(_ *txns.Txn) {
 	l.Condition.Broadcast()
 }
 
-// TODO: need test
 func (l *RWLock) tryUpgrade() {
 	if len(l.ReadingTxnIDs) != 1 || l.WaitingHead == nil {
 		return

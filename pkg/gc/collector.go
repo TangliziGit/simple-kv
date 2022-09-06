@@ -80,7 +80,7 @@ func (g *GarbageCollector) Collect(txn *txns.Txn) bool {
 
 		if val.VersionHeader == nil {
 			index.ActiveIndex[info.IndexID].Vacuum(info.Key)
-			// TODO: del active val
+			g.ValueManager.DelValue(val.ID)
 		}
 	}
 	txn.WriteSet = newWriteSet

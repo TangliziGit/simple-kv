@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"fmt"
 	modules2 "simple-kv/pkg/modules"
 	"simple-kv/pkg/txns"
 	"sync"
@@ -60,9 +61,9 @@ func (manager *TxnManager) GetActiveTxns() (res []*txns.Txn) {
 	return
 }
 
-func (manager *TxnManager) Commit(txn *txns.Txn) {
+func (manager *TxnManager) Commit(txn *txns.Txn) error {
 	if txn.State != txns.Processing {
-		return
+		return fmt.Errorf("fail to commit: state=%v", txn.State)
 	}
 
 	txn.CommitID = atomic.AddUint64(&manager.TxnCounter, 1)
@@ -83,11 +84,12 @@ func (manager *TxnManager) Commit(txn *txns.Txn) {
 	delete(manager.ActiveTxns, txn.ID)
 	manager.latch.Unlock()
 	manager.GC.Register(txn)
+	return nil
 }
 
-func (manager *TxnManager) Abort(txn *txns.Txn) {
+func (manager *TxnManager) Abort(txn *txns.Txn) error {
 	if txn.State != txns.Processing {
-		return
+		return fmt.Errorf("fail to commit: state=%v", txn.State)
 	}
 	manager.latch.Lock()
 	delete(manager.ActiveTxns, txn.ID)
@@ -105,4 +107,5 @@ func (manager *TxnManager) Abort(txn *txns.Txn) {
 	}
 
 	txn.State = txns.Aborted
+	return nil
 }

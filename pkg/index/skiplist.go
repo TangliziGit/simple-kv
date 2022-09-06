@@ -82,7 +82,6 @@ func (s *SkipList) Get(key uint64) *values.Value {
 	return node.Val
 }
 
-// TODO: deal with 0!
 func (s *SkipList) MustGet(key uint64, val string) *values.Value {
 	if key == 0 {
 		return nil

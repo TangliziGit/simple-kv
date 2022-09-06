@@ -3,6 +3,7 @@ package parsers
 import (
 	"fmt"
 	"simple-kv/pkg/protos"
+	"strings"
 	"unicode"
 )
 
@@ -23,8 +24,8 @@ func NewParser() *Parser {
 */
 
 func (p *Parser) Parse(input string) (*protos.Command, error) {
-	p.Input = input
-	p.Length = len(input)
+	p.Input = strings.Trim(input, " \n")
+	p.Length = len(p.Input)
 
 	t, next, err := p.getType(0)
 	if err != nil {

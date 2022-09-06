@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 )
 
-// TODO: pageable
+// TODO: use pages to store values?
 
 type ValueManager struct {
 	ValueCounter uint64
@@ -40,4 +40,10 @@ func (manager *ValueManager) NewValue(lock *locks.RWLock) *values.Value {
 	defer manager.latch.Unlock()
 	manager.ActiveValues[val.ID] = val
 	return val
+}
+
+func (manager *ValueManager) DelValue(valueID uint64) {
+	manager.latch.Lock()
+	defer manager.latch.Unlock()
+	delete(manager.ActiveValues, valueID)
 }

@@ -23,8 +23,8 @@ func NewWriteInfo(key uint64, index uint64) *WriteInfo {
 }
 
 type Operator interface {
-	Commit(txn *Txn)
-	Abort(txn *Txn)
+	Commit(txn *Txn) error
+	Abort(txn *Txn) error
 }
 
 type Txn struct {
@@ -58,10 +58,10 @@ func (txn *Txn) SetReading(valueID uint64) {
 	txn.ReadSet[valueID] = struct{}{}
 }
 
-func (txn *Txn) Commit() {
-	txn.Op.Commit(txn)
+func (txn *Txn) Commit() error {
+	return txn.Op.Commit(txn)
 }
 
-func (txn *Txn) Abort() {
-	txn.Op.Abort(txn)
+func (txn *Txn) Abort() error {
+	return txn.Op.Abort(txn)
 }
